@@ -1,3 +1,6 @@
 <resources>
     <string name="app_name">Locatr</string>
+    <string name="search">Find an Image near You!</string>
+    <string name="action_settings">Settings</string>
+
 </resources>
