@@ -2,6 +2,8 @@ package com.hashirbaig.android.locatr;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.location.Location;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -9,7 +11,6 @@ import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.Fragment;
-import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -19,26 +20,40 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 
-import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.maps.CameraUpdate;
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptor;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
+import com.google.android.gms.maps.model.MarkerOptions;
 import com.squareup.picasso.Picasso;
 
+import java.io.IOException;
 import java.util.List;
 
-public class LocatrFragment extends Fragment {
+public class LocatrFragment extends SupportMapFragment {
 
     private static final String TAG = "LocatrFragment";
 
     private static final int REQUEST_LOCATION = 1;
 
-    private ImageView mImageView;
-    private ImageView mLoadView;
+    //private ImageView mImageView;
+    //private ImageView mLoadView;
 
     private GoogleApiClient mGoogleApiClient;
     private List<GalleryItem> mItems;
+    private GalleryItem mMapItem;
+    private Bitmap mMapBitmap;
+    private Location mCurrentLocation;
+    private GoogleMap mMap;
 
     public static LocatrFragment newInstance() {
         return new LocatrFragment();
@@ -63,6 +78,14 @@ public class LocatrFragment extends Fragment {
                     }
                 })
                 .build();
+
+        getMapAsync(new OnMapReadyCallback() {
+            @Override
+            public void onMapReady(GoogleMap googleMap) {
+                mMap = googleMap;
+                updateUI();
+            }
+        });
     }
 
     @Override
@@ -78,6 +101,7 @@ public class LocatrFragment extends Fragment {
         mGoogleApiClient.disconnect();
     }
 
+    /*
     @Nullable
     @Override
     public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
@@ -93,6 +117,7 @@ public class LocatrFragment extends Fragment {
         mLoadView.setVisibility(isVisible ? View.VISIBLE : View.INVISIBLE);
     }
 
+    */
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
@@ -115,14 +140,9 @@ public class LocatrFragment extends Fragment {
         request.setNumUpdates(1);
 
         if (ActivityCompat.checkSelfPermission(this.getContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this.getContext(), Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
+
             ActivityCompat.requestPermissions(getActivity(), new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, REQUEST_LOCATION);
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
+
             return;
         }
 
@@ -135,27 +155,72 @@ public class LocatrFragment extends Fragment {
         });
     }
 
+    private void updateUI() {
+        if(mMap == null || mMapBitmap == null)
+            return;
+
+        LatLng itemPoint = new LatLng(mMapItem.getLat(), mMapItem.getLon());
+        LatLng myPoint = new LatLng(mCurrentLocation.getLatitude(), mCurrentLocation.getLongitude());
+
+        BitmapDescriptor descriptor = BitmapDescriptorFactory.fromBitmap(mMapBitmap);
+        MarkerOptions itemMarker = new MarkerOptions()
+                .position(itemPoint)
+                .icon(descriptor);
+        MarkerOptions myMarker = new MarkerOptions()
+                .position(myPoint);
+
+        mMap.clear();
+        mMap.addMarker(itemMarker);
+        mMap.addMarker(myMarker);
+
+        LatLngBounds bounds = new LatLngBounds.Builder()
+                .include(itemPoint)
+                .include(myPoint)
+                .build();
+
+        int margins = getResources().getDimensionPixelSize(R.dimen.map_inset_area);
+        CameraUpdate update = CameraUpdateFactory.newLatLngBounds(bounds, margins);
+        mMap.animateCamera(update);
+    }
+
     private class FindImageTask extends AsyncTask<Location, Void, Void> {
+
+        private Bitmap mBitmap;
+        private Location mLocation;
+        private GalleryItem mGalleryItem;
+
         @Override
         protected void onPreExecute() {
-            showLoading(true);
+            //showLoading(true);
         }
 
         @Override
         protected Void doInBackground(Location... params) {
-            mItems = new FlickrFetchr().searchPhotos(params[0]);
+
+            mLocation = params[0];
+            mItems = new FlickrFetchr().searchPhotos(mLocation);
+
+            if(mItems.size() < 1)
+                return null;
+
+            mGalleryItem = mItems.get(0);
+
+            try {
+                byte[] mImageBytes = new FlickrFetchr().getUrlBytes(mItems.get(0).getUrl());
+                mBitmap = BitmapFactory.decodeByteArray(mImageBytes, 0, mImageBytes.length);
+            } catch (IOException ioe) {
+                ioe.printStackTrace();
+            }
             return null;
         }
 
         @Override
         protected void onPostExecute(Void aVoid) {
-            showLoading(false);
-            if(mItems.size() > 0) {
-                Picasso.with(getActivity())
-                        .load(mItems.get(0).getUrl())
-                        .placeholder(R.drawable.progress_animation)
-                        .into(mImageView);
-            }
+            //showLoading(false);
+            mMapBitmap = mBitmap;
+            mCurrentLocation = mLocation;
+            mMapItem = mGalleryItem;
+            updateUI();
         }
     }
 

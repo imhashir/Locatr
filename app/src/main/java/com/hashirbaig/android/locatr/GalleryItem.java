@@ -15,11 +15,14 @@ public class GalleryItem {
     @SerializedName("url_s")
     private String mUrl;
 
-    @SerializedName("url_o")
-    private String mOriginalUrl;
-
     @SerializedName("owner")
     private String mOwner;
+
+    @SerializedName("latitude")
+    private double mLat;
+
+    @SerializedName("longitude")
+    private double mLon;
 
     @Override
     public String toString() {
@@ -46,7 +49,19 @@ public class GalleryItem {
                 .build();
     }
 
-    public String getOriginalUrl() {
-        return mOriginalUrl;
+    public double getLon() {
+        return mLon;
+    }
+
+    public void setLon(double lon) {
+        mLon = lon;
+    }
+
+    public double getLat() {
+        return mLat;
+    }
+
+    public void setLat(double lat) {
+        mLat = lat;
     }
 }
